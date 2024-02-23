@@ -35,15 +35,52 @@ const triangleTable = [
   [],             // 1111
 ]
 
+// really simple and barely functional smooth noise
+function smoothNoise(w, h, steps = 1, delta = 3) {
+  let noise = 
+      Array(w).fill(0)
+        .map(_ => 
+          Array(h).fill(0)
+             .map(_ => random()))
+  
+  // smooth out
+  
+  const hDelta = floor(delta/2)
+  
+  while(steps-- > 0) {
+    for(let i = hDelta; i < noise.length - hDelta; i++) {
+      for(let j = hDelta; j < noise[i].length - hDelta; j++) {
+
+        let avg = 0
+
+        for(let dx = -hDelta; dx <= hDelta; dx++) {
+          for(let dy = -hDelta; dy <= hDelta; dy++) {
+            avg += noise[i + dx][j + dy]
+          }
+        }
+
+        noise[i][j] = avg / (delta * delta)
+      }
+    }
+  }
+  
+  return noise
+}
+
 const grid = []
 
 function setup() {
   createCanvas(500, 500);
   
-  for(let i = 0; i < 1 + width / RESOLUTION; i++) {
+  const cols = (1 + width / RESOLUTION)
+  const rows = (1 + height / RESOLUTION)
+  
+  const noise = smoothNoise(cols, rows, 5, 3)
+  
+  for(let i = 0; i < cols; i++) {
     grid[i] = []
-    for(let j = 0; j < 1 + height / RESOLUTION; j++) {
-      grid[i][j] = round(random())
+    for(let j = 0; j < rows; j++) {
+      grid[i][j] = noise[i][j]
     }
   }
   
@@ -58,6 +95,13 @@ function average(v1, v2) {
   return Vector.mult(Vector.add(v1, v2), 0.5)  
 }
 
+function getConfig(i, j) {
+  return round(grid[i    ][j    ]) << 0 |
+         round(grid[i + 1][j    ]) << 1 |
+         round(grid[i    ][j + 1]) << 2 |
+         round(grid[i + 1][j + 1]) << 3
+}
+
 function draw() {
   background(50);
   
@@ -69,21 +113,25 @@ function draw() {
       const offsetVector     = createVector(i, j)
       const resolutionVector = createVector(RESOLUTION, RESOLUTION)
 
-      const config = 
-            grid[i    ][j    ] << 0 |
-            grid[i + 1][j    ] << 1 |
-            grid[i    ][j + 1] << 2 |
-            grid[i + 1][j + 1] << 3
-      
+      const config = getConfig(i, j)
       const tri = triangleTable[config]
       
       let tris = []
       
       for(const triangle of tri) {
         const edge = edges[triangle]
+
+        const v1 = offsets[edge[0]] // v1
+        const v2 = offsets[edge[1]] // v2
         
-        const v = average(
-          offsets[edge[0]], offsets[edge[1]])
+        const weight1 = grid[i + v1.x][j + v1.y]
+        const weight2 = grid[i + v2.x][j + v2.y]
+        
+        const v = Vector.add(
+          Vector.mult(v1, weight1),
+          Vector.mult(v2, weight2))
+        
+        v.mult(1 / (weight1 + weight2))
         
         v.add(offsetVector).mult(resolutionVector)
         
@@ -95,6 +143,7 @@ function draw() {
           
           tris = []
         }
+
       }
     }
   }
